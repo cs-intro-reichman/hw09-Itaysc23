@@ -1,174 +1,163 @@
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
+import java.util.HashMap;
+import java.util.Random;
 
-public class LanguageModelTester {
-        public static void main(String[] args) {
-        String methodName = args[0];
-        boolean result = false;
-        switch (methodName) {
-            case "calculateProbabilities":
-                result = testCalculateProbabilities();
-                break;
-            case "getRandomChar":
-                result = testGetRandomChar();
-                break;
-            case "train":
-                result = testTrain();
-                break;
-            case "generate":
-                result = testGenerate();
-                break;
-            case "all":
-                result = testCalculateProbabilities();
-                result = result && testGetRandomChar();
-                result = result && testTrain();
-                result = result && testGenerate();
-                break;
-            default:
-                break;
-        }
-        System.out.println("Test " + methodName + " result: " + (result ? "PASSED" : "FAILED"));
+public class LanguageModel {
+
+    // The map of this model.
+    // Maps windows to lists of charachter data objects.
+    HashMap<String, List> CharDataMap;
+    
+    // The window length used in this model.
+    int windowLength;
+    
+    // The random number generator used by this model. 
+	private Random randomGenerator;
+
+    /** Constructs a language model with the given window length and a given
+     *  seed value. Generating texts from this model multiple times with the 
+     *  same seed value will produce the same random texts. Good for debugging. */
+    public LanguageModel(int windowLength, int seed) {
+        this.windowLength = windowLength;
+        randomGenerator = new Random(seed);
+        CharDataMap = new HashMap<String, List>();
     }
 
-    // Test method for the calculateProbabilities() method
-    public static boolean testCalculateProbabilities() {
-        LanguageModel model = new LanguageModel(3);
-        String word = "computer_science";
-        List list = new List(); 
-        for (int i = 0; i < word.length(); i++) {
-            list.update(word.charAt(word.length() - 1 - i));
-        }
-        model.calculateProbabilities(list);
-        
-        String resString = "((o 1 0.0625 0.0625) (m 1 0.0625 0.125) (p 1 0.0625 0.1875) (u 1 0.0625 0.25) (t 1 0.0625 0.3125) (r 1 0.0625 0.375) (_ 1 0.0625 0.4375) (s 1 0.0625 0.5) (i 1 0.0625 0.5625) (n 1 0.0625 0.625) (c 3 0.1875 0.8125) (e 3 0.1875 1.0))";
-        boolean res = list.toString().equals(resString);
-        if (!res){
-            System.out.println("Expected: " + resString);
-            System.out.println("Actual: " + list.toString());
-        }
-        return res;
+    /** Constructs a language model with the given window length.
+     * Generating texts from this model multiple times will produce
+     * different random texts. Good for production. */
+    public LanguageModel(int windowLength) {
+        this.windowLength = windowLength;
+        randomGenerator = new Random();
+        CharDataMap = new HashMap<String, List>();
     }
 
+    /** Builds a language model from the text in the given file (the corpus). */
+	public void train(String fileName) {
+		String window = "";
+		char c;
 
-    // Test method for the getRandomChar() method
-    public static boolean testGetRandomChar() {
-        boolean result = true;
-        LanguageModel model = new LanguageModel(3, 20);
-        String [] words = {"home","worker","william_shakespeare"};
-        char [][] expected = {
-                {'m','h','e','h'},
-                {'w','o','k','e','w','r'},
-                {'r','s','h','i','a','m','k','i','r','h','s','a','a','i','a','i','l','l','r'}
-        };
-        for (int i = 0; i < words.length; i++) {
-            List list = new List();
-            for (int j = 0; j < words[i].length(); j++) {
-                list.update(words[i].charAt(words[i].length() - 1 - j));
-            }
-            boolean res = true;
-            model.calculateProbabilities(list);
-            for (int j = 0; j < words[i].length(); j++) {
-                char actual = model.getRandomChar(list);
-                boolean temp = actual == expected[i][j];
-                if (!temp) {
-                    System.out.println("Expected: " + expected[i][j]);
-                    System.out.println("Actual: " + actual);
-                }
-                res = res && temp;
-            }
-            result = result && res;
-        } 
-        if (!result){
-            System.out.println("GetRandomChar Test failed");
-        }
-        return result;
-    }
+        In in = new In(fileName);
+		// Constructs the first window
+		while ((!in.isEmpty()) && (window.length() < windowLength)) {
+			// Gets the next character from standard input
+			c  = in.readChar();
+			window += c;
+		}
+		// Processes the entire text, one character at a time
+		while (!in.isEmpty()) {
+			c  = in.readChar();
+			
+			// Checks if the window is already in the map
+			List probs = CharDataMap.get(window);
+			if (probs == null) {
+				// The window is not in the map;
+				// Creates a new list and adds the (window,list) to the map
+				probs = new List();
+				CharDataMap.put(window, probs);
+			}
+			// If the character is not in the CharData list,
+			// adds it to the beginning of the list. 
+			// Otherwise, increments the character's counter.
+			probs.update(c);
 
-    // Test method for the train() method
-    public static boolean testTrain() {
-        boolean result = true;
-        String [] content = {"commitee_","elephant_have_big_ears","linked_lists_are_fun","you_cannot_teach_a_man_anything;_you_can_only_help_him_find_it_within_himself"};
-        String [] expected = {
-            "mm : ((i 1 1.0 1.0))\nee : ((_ 1 1.0 1.0))\nte : ((e 1 1.0 1.0))\nit : ((e 1 1.0 1.0))\nco : ((m 1 1.0 1.0))\nmi : ((t 1 1.0 1.0))\nom : ((m 1 1.0 1.0))\n",
-            "_b : ((i 1 1.0 1.0))\nnt : ((_ 1 1.0 1.0))\n_e : ((a 1 1.0 1.0))\nel : ((e 1 1.0 1.0))\nbi : ((g 1 1.0 1.0))\n_h : ((a 1 1.0 1.0))\nep : ((h 1 1.0 1.0))\nt_ : ((h 1 1.0 1.0))\nan : ((t 1 1.0 1.0))\nve : ((_ 1 1.0 1.0))\nar : ((s 1 1.0 1.0))\nav : ((e 1 1.0 1.0))\nph : ((a 1 1.0 1.0))\ng_ : ((e 1 1.0 1.0))\nle : ((p 1 1.0 1.0))\nha : ((v 1 0.5 0.5) (n 1 0.5 1.0))\ne_ : ((b 1 1.0 1.0))\nea : ((r 1 1.0 1.0))\nig : ((_ 1 1.0 1.0))\n",
-            "st : ((s 1 1.0 1.0))\n" + //
-                                "_a : ((r 1 1.0 1.0))\n" + //
-                                "in : ((k 1 1.0 1.0))\n" + //
-                                "_f : ((u 1 1.0 1.0))\n" + //
-                                "is : ((t 1 1.0 1.0))\n" + //
-                                "s_ : ((a 1 1.0 1.0))\n" + //
-                                "_l : ((i 1 1.0 1.0))\n" + //
-                                "fu : ((n 1 1.0 1.0))\n" + //
-                                "ar : ((e 1 1.0 1.0))\n" + //
-                                "re : ((_ 1 1.0 1.0))\n" + //
-                                "ke : ((d 1 1.0 1.0))\n" + //
-                                "e_ : ((f 1 1.0 1.0))\n" + //
-                                "d_ : ((l 1 1.0 1.0))\n" + //
-                                "li : ((s 1 0.5 0.5) (n 1 0.5 1.0))\n" + //
-                                "nk : ((e 1 1.0 1.0))\n" + //
-                                "ed : ((_ 1 1.0 1.0))\n" + //
-                                "ts : ((_ 1 1.0 1.0))\n",
-                
-            "hi : ((m 2 0.5 0.5)\n(n 2 0.5 1.0))\n;_ : ((y 1 1.0 1.0))\nlp : ((_ 1 1.0 1.0))\ny_ : ((h 1 1.0 1.0))\nu_ : ((c 2 1.0 1.0))\nly : ((_ 1 1.0 1.0))\nm_ : ((f 1 1.0 1.0))\nma : ((n 1 1.0 1.0))\nyo : ((u 2 1.0 1.0))\nyt : ((h 1 1.0 1.0))\nea : ((c 1 1.0 1.0))\na_ : ((m 1 1.0 1.0))\nac : ((h 1 1.0 1.0))\nim : ((s 1 0.5 0.5)\n(_ 1 0.5 1.0))\nin : ((_ 1 0.3333333333333333 0.3333333333333333)\n(d 1 0.3333333333333333 0.6666666666666666)\n(g 1 0.3333333333333333 1.0))\nms : ((e 1 1.0 1.0))\nel : ((f 1 0.5 0.5)\n(p 1 0.5 1.0))\nit : ((h 1 0.5 0.5)\n(_ 1 0.5 1.0))\nan : ((y 1 0.25 0.25)\n(_ 2 0.5 0.75)\n(n 1 0.25 1.0))\nn_ : ((h 1 0.3333333333333333 0.3333333333333333)\n(o 1 0.3333333333333333 0.6666666666666666)\n(a 1 0.3333333333333333 1.0))\ng; : ((_ 1 1.0 1.0))\nnd : ((_ 1 1.0 1.0))\nng : ((; 1 1.0 1.0))\nnl : ((y 1 1.0 1.0))\nnn : ((o 1 1.0 1.0))\nno : ((t 1 1.0 1.0))\nfi : ((n 1 1.0 1.0))\nny : ((t 1 1.0 1.0))\nwi : ((t 1 1.0 1.0))\nse : ((l 1 1.0 1.0))\nca : ((n 2 1.0 1.0))\non : ((l 1 1.0 1.0))\n_a : ((n 1 0.5 0.5)\n(_ 1 0.5 1.0))\n_c : ((a 2 1.0 1.0))\not : ((_ 1 1.0 1.0))\nch : ((_ 1 1.0 1.0))\nou : ((_ 2 1.0 1.0))\n_f : ((i 1 1.0 1.0))\n_h : ((i 2 0.6666666666666666 0.6666666666666666)\n(e 1 0.3333333333333333 1.0))\n_i : ((t 1 1.0 1.0))\nt_ : ((w 1 0.5 0.5)\n(t 1 0.5 1.0))\n_m : ((a 1 1.0 1.0))\np_ : ((h 1 1.0 1.0))\n_o : ((n 1 1.0 1.0))\nte : ((a 1 1.0 1.0))\nth : ((i 2 1.0 1.0))\n_t : ((e 1 1.0 1.0))\nh_ : ((a 1 1.0 1.0))\n_w : ((i 1 1.0 1.0))\n_y : ((o 1 1.0 1.0))\nd_ : ((i 1 1.0 1.0))\nhe : ((l 1 1.0 1.0))\n",        
-        };
-        
+			// Advances the window
+			window += c;
+			window = window.substring(1, window.length());
+		}
 
-        for (int i = 0; i < content.length; i++) {
-            LanguageModel languageModel = new LanguageModel(2,20);
-            boolean res = true;
-            try {
-                // SETUP -> DONT CHANGE
-                File file = File.createTempFile("test"+(i+1), ".txt");
-                file.setWritable(true);
+		// Computes and sets the p and pp fields of all the
+		// CharData objects in the each linked list in the map.
+		for (List probs : CharDataMap.values())
+			calculateProbabilities(probs);
+	}
 
-                FileWriter fileWriter = new FileWriter(file.getName(), true);
-                BufferedWriter bw = new BufferedWriter(fileWriter);
-                bw.write(content[i]);
-                bw.close();   
-                // ACTUAL TEST
-                languageModel.train(file.getName());
-                res = stringEqualsNoSpaces(languageModel.toString(), expected[i]);
-                // ACTUAL TEST ENDS
+    // Computes and sets the probabilities (p and cp fields) of all the
+	// characters in the given list. */
+	void calculateProbabilities(List probs) {				
+		// Calculate total counts, to be used for probability calculation
+		int windowTotal = 0;
+		for (int i = 0; i < probs.getSize(); ++i) {
+			windowTotal += probs.get(i).count;
+		}
 
-                // DONT CHANGE <- SETUP
-                file.deleteOnExit();
-            } catch (Exception e) {
-                res = false;
-                
-            } finally {
-                if (!res){
-                    System.out.println("Train Test " + i + " failed");
-                }
-                result = result && res;
-            }
-            
-        }    
-        return result;  
-    }
+		// Calculating probabilities and CDF values
+		for (int i = 0; i < probs.getSize(); ++i) {
+			// calculate probability
+			probs.get(i).p = probs.get(i).count / (double)windowTotal; 
+
+			// update CDF for the current element
+			probs.get(i).cp = probs.get(i).p + (i > 0 ? probs.get(i - 1).cp : 0); 
+		}
+	}
+
+    // Returns a random character from the given probabilities list.
+	char getRandomChar(List probs) {
+		// Monte Carlo process
+		double random = randomGenerator.nextDouble();
+		char charToReturn = ' ';
+		for (int i = 0; i < probs.getSize(); ++i) {
+			if (random < probs.get(i).cp) {
+				charToReturn = probs.get(i).chr;
+				break;
+			}
+		}
+		return charToReturn;
+	}
+
+    /**
+	 * Generates a random text, based on the probabilities that were learned during training. 
+	 * @param initialText - text to start with. If initialText's last substring of size numberOfLetters
+	 * doesn't appear as a key in Map, we generate no text and return only the initial text. 
+	 * @param numberOfLetters - the size of text to generate
+	 * @return the generated text
+	 */
+	public String generate(String initialText, int textLength) {
+		// If initial text is shorter than the window length, we can't generate anything further.
+		if (initialText.length() < windowLength)
+			return initialText;
+
+		String generatedText = initialText;
+		for (int i = 0; i < textLength; ++i) {
+			// Extracts the window from the generated text, which is exactly the last windowLength characters
+			String window = generatedText.substring(generatedText.length() - windowLength, generatedText.length());
+			List probs = CharDataMap.get(window);
+			if (probs == null)
+				return generatedText;
+
+			generatedText += getRandomChar(probs);
+		}
+		return generatedText;
+	}
+
+    /** Returns a string representing the map of this language model. */
+	public String toString() {
+		StringBuilder str = new StringBuilder();
+		for (String key : CharDataMap.keySet()) {
+			List keyProbs = CharDataMap.get(key);
+			str.append(key + " : " + keyProbs + "\n");
+		}
+		return str.toString();
+	}
+
+    public static void main(String[] args) {
+        int windowLength = Integer.parseInt(args[0]);
+		String initialText = args[1];
+		int generatedTextLength = Integer.parseInt(args[2]);
+		Boolean randomGeneration = args[3].equals("random");
+		String fileName = args[4];
+
+        // Create the LanguageModel object
+        LanguageModel lm;
+        if (randomGeneration)
+            lm = new LanguageModel(windowLength);
+        else
+            lm = new LanguageModel(windowLength, 20);
 
 
-    // Test method for the generate() method
-    public static boolean testGenerate() {
-        LanguageModel languageModel = new LanguageModel(7,20);
-        languageModel.train("originofspecies.txt");
-        String generatedText = languageModel.generate("Natural", 172);
-        String expectedGeneratedText = "Natural selection, how is it possible, generally much changed\n"+
-        "simultaneous rotation, when the importance of Batrachians, 393.\n"+
-        "  Batrachians (frogs, toads, newts) have to modified ";
+		// Trains the model, creating the map.
+		lm.train(fileName);
 
-        boolean res = stringEqualsNoSpaces(generatedText, expectedGeneratedText);
-        if (!res){
-            System.out.println("Expected: " + expectedGeneratedText);
-            System.out.println("Actual: " + generatedText);
-            System.out.println("FAIL with windowLength = 7, seed = 20, initialText = Natural, textLength = 172");
-        }
-        return res;
-    }
-
-    private static boolean stringEqualsNoSpaces(String s1, String s2) {
-        s1 = s1.replaceAll("\\s+", "");
-        s2 = s2.replaceAll("\\s+", "");
-        return s1.equals(s2);
+		// Generates text, and prints it.
+		System.out.println(lm.generate(initialText, generatedTextLength));
     }
 }
